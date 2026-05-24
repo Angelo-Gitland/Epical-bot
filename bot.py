@@ -71,7 +71,7 @@ class BotClient(discord.Client):
                     ch = self.get_channel(message.channel.id)
                     panel_msg = await ch.fetch_message(panel_info["message_id"])
                     updated_embed = panel_msg.embeds[0]
-                    updated_embed.set_field_at(0, name=f"🥚 {label}", value=str(count), inline=True)
+                    updated_embed.set_field_at(0, name=label, value=str(count), inline=True)
                     await panel_msg.edit(embed=updated_embed)
                 except Exception:
                     pass
@@ -274,8 +274,7 @@ async def say(interaction: discord.Interaction, message: str):
     app_commands.Choice(name="Ban", value="ban"),
 ])
 @app_commands.checks.has_permissions(manage_guild=True)
-async def honeyp
-ot(
+async def honeypot(
     interaction: discord.Interaction,
     channel: discord.TextChannel,
     message: str = None,
@@ -298,7 +297,7 @@ ot(
     label = "Kicks" if punishment == "kick" else "Bans"
 
     embed = discord.Embed(title=title, description=description, color=0xF4A732)
-    embed.add_field(name=f"{label}", value="0", inline=True)
+    embed.add_field(name=label, value="0", inline=True)
 
     try:
         sent = await channel.send(embed=embed)
