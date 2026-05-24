@@ -11,11 +11,62 @@ import os
 
 class BotClient(discord.Client):
     def __init__(self):
-        super().__init__(intents=discord.Intents.default())
+        super().__init__(intents=discord.Intents.all())
         self.tree = app_commands.CommandTree(self)
+        self.honeypots = {}  # {channel_id: {"punishment": "kick"/"ban", "allowed": user_id or None}}
 
     async def on_ready(self):
         await self.tree.sync()
+        print(f"Logged in as {self.user}")
+
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+        if message.channel.id not in self.honeypots:
+            return
+
+        config = self.honeypots[message.channel.id]
+
+        # Allow the whitelisted user
+        if config["allowed"] and message.author.id == config["allowed"].id:
+            return
+
+        guild = message.guild
+        user = message.author
+        punishment = config["punishment"]
+
+        # Delete the message
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            pass
+
+        # DM the user
+        try:
+            dm_msg = (
+                f"**⚠️ You sent a message in the honeypot channel! "
+                f"{user.mention} You have been {punishment}ned from {guild.name}!**\n\n"
+                f"[Support Us!](https://discord.gg/kfXTWpk7nC)"
+            )
+            await user.send(dm_msg)
+        except discord.Forbidden:
+            pass
+
+        # Apply punishment
+        try:
+            if punishment == "ban":
+                await guild.ban(user, reason="Triggered honeypot channel.")
+            else:
+                await guild.kick(user, reason="Triggered honeypot channel.")
+        except discord.Forbidden:
+            # Find the honeypot channel to send the permission error
+            channel = self.get_channel(message.channel.id)
+            if channel:
+                await channel.send(
+                    f"## Permission Required!\n\n"
+                    f"**{user.name} triggered the honeypot channel, but I do not have permission to "
+                    f"{punishment} them! Please ensure my role is higher than them.**"
+                )
 
 client = BotClient()
 
@@ -192,6 +243,58 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
 async def say(interaction: discord.Interaction, message: str):
     await interaction.response.send_message("Message sent!", ephemeral=True)
     await interaction.channel.send(message)
+
+@client.tree.command(name="honeypot", description="Create a honeypot channel.")
+@app_commands.describe(
+    channel="Channel to set as honeypot.",
+    message="Set the honeypot panel message.",
+    punishment="Punishment type for anyone who sends a message (kick or ban).",
+    allowed="Set an allowed user who can send messages in the honeypot channel."
+)
+@app_commands.choices(punishment=[
+    app_commands.Choice(name="Kick", value="kick"),
+    app_commands.Choice(name="Ban", value="ban"),
+])
+@app_commands.checks.has_permissions(manage_guild=True)
+async def honeypot(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel,
+    message: str = None,
+    punishment: str = "kick",
+    allowed: discord.Member = None
+):
+    default_message = (
+        "## ⚠️ Don't Chat Here!\n\n"
+        "This channel is used to catch compromised accounts. "
+        "Any message sent here may result in a softkick."
+    )
+    panel_message = message if message else default_message
+
+    # Register the honeypot
+    client.honeypots[channel.id] = {
+        "punishment": punishment,
+        "allowed": allowed
+    }
+
+    # Send the panel message in the honeypot channel
+    try:
+        await channel.send(panel_message)
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            f"I don't have permission to send messages in {channel.mention}!",
+            ephemeral=True
+        )
+        return
+
+    allowed_text = f"{allowed.mention}" if allowed else "None"
+    await interaction.response.send_message(
+        f"## ✅ Honeypot Set!\n\n"
+        f"- **Channel:** {channel.mention}\n"
+        f"- **Punishment:** {punishment.capitalize()}\n"
+        f"- **Allowed User:** {allowed_text}\n\n"
+        f"Anyone who sends a message in that channel will be **{punishment}ned** automatically.",
+        ephemeral=True
+    )
 
 @client.tree.command(name="obfuscate", description="Obfuscate a Lua script file.")
 @app_commands.describe(file="Attach a .lua or .txt file that you want to obfuscate.", passes="Number of protection passes (1-5).")
