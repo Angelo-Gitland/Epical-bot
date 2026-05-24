@@ -43,14 +43,19 @@ class BotClient(discord.Client):
         except discord.Forbidden:
             pass
 
-        # DM the user
         try:
-            dm_msg = (
-                f"**⚠️ You sent a message in the honeypot channel! "
-                f"{user.mention} You have been {punishment}ned from {guild.name}!**\n\n"
-                f"[Support Us!](https://discord.gg/kfXTWpk7nC)"
+            punishment_text = "banned" if punishment == "ban" else "kicked"
+            dm_embed = discord.Embed(
+                title="⚠️ You triggered honeypot!",
+                description=(
+                    f"**You triggered the honeypot channel in {guild.name}! "
+                    f"Therefore you are {punishment_text}!**\n\n"
+                    f"Epical Bot | Security Bot"
+                ),
+                color=0xE84545
             )
-            await user.send(dm_msg)
+            dm_embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1473300897160368188/1507945113488457859/Screenshot_20260505-192658.jpg?ex=6a13bed3&is=6a126d53&hm=b1b56cbed34a5afcdb55879fbfc4a7dae370eb331d61a6b90dff1c985279f0ed&")
+            await user.send(embed=dm_embed)
         except discord.Forbidden:
             pass
 
