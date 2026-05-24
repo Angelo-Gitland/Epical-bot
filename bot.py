@@ -13,9 +13,7 @@ class BotClient(discord.Client):
     def __init__(self):
         super().__init__(intents=discord.Intents.all())
         self.tree = app_commands.CommandTree(self)
-        self.honeypots = {}
-        self.honeypot_counts = {}
-        self.honeypot_panels = {}
+        self.honeypots = {}  # {channel_id: {"punishment": "kick"/"ban", "allowed": user_id or None}}
 
     async def on_ready(self):
         await self.tree.sync()
@@ -43,19 +41,14 @@ class BotClient(discord.Client):
         except discord.Forbidden:
             pass
 
+        # DM the user
         try:
-            punishment_text = "banned" if punishment == "ban" else "kicked"
-            dm_embed = discord.Embed(
-                title="⚠️ You triggered honeypot!",
-                description=(
-                    f"**You triggered the honeypot channel in {guild.name}! "
-                    f"Therefore you are {punishment_text}!**\n\n"
-                    f"Epical Bot | Security Bot"
-                ),
-                color=0xE84545
+            dm_msg = (
+                f"**⚠️ You sent a message in the honeypot channel! "
+                f"{user.mention} You have been {punishment}ned from {guild.name}!**\n\n"
+                f"[Support Us!](https://discord.gg/kfXTWpk7nC)"
             )
-            dm_embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1473300897160368188/1507945113488457859/Screenshot_20260505-192658.jpg?ex=6a13bed3&is=6a126d53&hm=b1b56cbed34a5afcdb55879fbfc4a7dae370eb331d61a6b90dff1c985279f0ed&")
-            await user.send(embed=dm_embed)
+            await user.send(dm_msg)
         except discord.Forbidden:
             pass
 
@@ -65,31 +58,15 @@ class BotClient(discord.Client):
                 await guild.ban(user, reason="Triggered honeypot channel.")
             else:
                 await guild.kick(user, reason="Triggered honeypot channel.")
-
-            self.honeypot_counts[message.channel.id] = self.honeypot_counts.get(message.channel.id, 0) + 1
-            count = self.honeypot_counts[message.channel.id]
-            label = "Kicks" if punishment == "kick" else "Bans"
-
-            panel_info = self.honeypot_panels.get(message.channel.id)
-            if panel_info:
-                try:
-                    ch = self.get_channel(message.channel.id)
-                    panel_msg = await ch.fetch_message(panel_info["message_id"])
-                    updated_embed = panel_msg.embeds[0]
-                    updated_embed.set_field_at(0, name=label, value=str(count), inline=True)
-                    await panel_msg.edit(embed=updated_embed)
-                except Exception:
-                    pass
-
         except discord.Forbidden:
-            ch = self.get_channel(message.channel.id)
-            if ch:
-                err_embed = discord.Embed(
-                    description=f"**{user.name} triggered the honeypot channel, but I do not have permission to {punishment} them! Please ensure my role is higher than them.**",
-                    color=0xFF4444
+            # Find the honeypot channel to send the permission error
+            channel = self.get_channel(message.channel.id)
+            if channel:
+                await channel.send(
+                    f"## Permission Required!\n\n"
+                    f"**{user.name} triggered the honeypot channel, but I do not have permission to "
+                    f"{punishment} them! Please ensure my role is higher than them.**"
                 )
-                err_embed.title = "Permission Required!"
-                await ch.send(embed=err_embed)
 
 client = BotClient()
 
@@ -286,27 +263,22 @@ async def honeypot(
     punishment: str = "kick",
     allowed: discord.Member = None
 ):
-    panel_message = message
+    default_message = (
+        "## ⚠️ Don't Chat Here!\n\n"
+        "This channel is used to catch compromised accounts. "
+        "Any message sent here may result in a softkick."
+    )
+    panel_message = message if message else default_message
 
+    # Register the honeypot
     client.honeypots[channel.id] = {
         "punishment": punishment,
         "allowed": allowed
     }
-    client.honeypot_counts[channel.id] = 0
 
-    title = "⚠️ DO NOT SEND MESSAGES IN THIS CHANNEL"
-    description = panel_message if message else (
-        "This channel is used to catch compromised accounts. "
-        "Any messages sent here may result in a softkick."
-    )
-    label = "Kicks" if punishment == "kick" else "Bans"
-
-    embed = discord.Embed(title=title, description=description, color=0xF4A732)
-    embed.add_field(name=label, value="0", inline=True)
-
+    # Send the panel message in the honeypot channel
     try:
-        sent = await channel.send(embed=embed)
-        client.honeypot_panels[channel.id] = {"message_id": sent.id}
+        await channel.send(panel_message)
     except discord.Forbidden:
         await interaction.response.send_message(
             f"I don't have permission to send messages in {channel.mention}!",
