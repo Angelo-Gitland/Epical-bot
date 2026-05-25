@@ -5,15 +5,11 @@ import os
 
 class BotClient(discord.Client):
     def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        intents.members = True
-        super().__init__(intents=intents)
+        super().__init__(intents=discord.Intents.default())
         self.tree = app_commands.CommandTree(self)
 
     async def on_ready(self):
         await self.tree.sync()
-        print(f"Logged in as {self.user} | Synced commands!")
 
 client = BotClient()
 
@@ -21,7 +17,6 @@ client = BotClient()
 @app_commands.describe(user="Select a members to kick.", reason="Reason to kick (Optional).")
 @app_commands.checks.has_permissions(kick_members=True)
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str = None):
-    await interaction.response.defer(ephemeral=True)
     if reason is None:
         reason = "No reason provided"
     
@@ -33,9 +28,9 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
 
     try:
         await user.kick(reason=f"Kicked by {interaction.user}: {reason}")
-        await interaction.followup.send(f"Successfully kicked {user.mention}. Reason: {reason}")
+        await interaction.response.send_message(f"Successfully kicked {user.mention}. Reason: {reason}")
     except discord.Forbidden:
-        await interaction.followup.send("I do not have permissions to kick this user!", ephemeral=True)
+        await interaction.response.send_message("I do not have permissions to kick this user!", ephemeral=True)
 
 @kick.error
 async def kick_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -64,7 +59,6 @@ def parse_duration_to_seconds(duration_str: str) -> int:
 @app_commands.describe(user="User to ban.", reason="Reason to ban (Optional).", duration="Duration to hide message activities for this user (Optional).")
 @app_commands.checks.has_permissions(ban_members=True)
 async def ban(interaction: discord.Interaction, user: discord.Member, reason: str = None, duration: str = None):
-    await interaction.response.defer(ephemeral=True)
     if reason is None:
         reason = "No reason provided."
     
@@ -79,9 +73,9 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
 
     try:
         await user.ban(delete_message_seconds=delete_seconds, reason=f"Banned by {interaction.user}: {reason}")
-        await interaction.followup.send(f"Successfully banned {user.mention}. Reason: {reason}")
+        await interaction.response.send_message(f"Successfully banned {user.mention}. Reason: {reason}")
     except discord.Forbidden:
-        await interaction.followup.send("I do not have permission to ban this user!", ephemeral=True)
+        await interaction.response.send_message("I do not have permission to ban this user!", ephemeral=True)
 
 @ban.error
 async def ban_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -91,9 +85,8 @@ async def ban_error(interaction: discord.Interaction, error: app_commands.AppCom
 @client.tree.command(name="say", description="Let bot send the message of what you say!")
 @app_commands.describe(message="The message you want the bot to repeat.")
 async def say(interaction: discord.Interaction, message: str):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.send_message("Message sent!", ephemeral=True)
     await interaction.channel.send(message)
-    await interaction.followup.send("Message sent!", ephemeral=True)
 
 @client.tree.command(name="purge", description="Clear messages in this channel.")
 @app_commands.describe(
@@ -110,6 +103,8 @@ async def purge(
     filter_by_role: discord.Role = None,
     filter_by_bots: bool = False
 ):
+    await interaction.response.defer(ephemeral=True)
+
     def check(msg):
         if filter_by_user and msg.author != filter_by_user:
             return False
@@ -121,9 +116,9 @@ async def purge(
 
     try:
         deleted = await interaction.channel.purge(limit=number_of_messages, check=check)
-        await interaction.response.send_message(f"Successfully deleted **{len(deleted)}** message(s).", ephemeral=True)
+        await interaction.followup.send(f"Successfully deleted **{len(deleted)}** message(s).", ephemeral=True)
     except discord.Forbidden:
-        await interaction.response.send_message("I do not have permission to purge messages!", ephemeral=True)
+        await interaction.followup.send("I do not have permission to purge messages!", ephemeral=True)
 
 @purge.error
 async def purge_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
