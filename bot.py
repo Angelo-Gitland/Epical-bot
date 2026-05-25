@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 import re
 import os
+from datetime import timedelta
 
 class BotClient(discord.Client):
     def __init__(self):
@@ -122,6 +123,64 @@ async def purge(
 
 @purge.error
 async def purge_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
+
+@client.tree.command(name="timeout", description="Timeout a user.")
+@app_commands.describe(
+    user="User to timeout.",
+    reason="Reason for timeout (Optional).",
+    duration="Time/Duration for timeout, e.g 1d, 24h, 67m, 100s (Optional)."
+)
+@app_commands.checks.has_permissions(moderate_members=True)
+async def timeout(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    reason: str = None,
+    duration: str = None
+):
+    await interaction.response.defer(ephemeral=True)
+
+    display_reason = reason if reason else "No reason provided."
+    display_duration = duration if duration else "No time provided."
+    timeout_seconds = parse_duration_to_seconds(duration) if duration else 0
+
+    try:
+        dm_embed = discord.Embed(
+            description=(
+                f"**Reason:** {display_reason}\n"
+                f"**Duration:** {display_duration}\n"
+                f"**Timed out by:** {interaction.user.name} > {interaction.user.display_name}"
+            ),
+            color=0xFF6B00
+        )
+        dm_embed.title = f"⚠️ You were timed out in {interaction.guild.name}"
+        dm_embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
+        dm_embed.add_field(name="", value="", inline=False)
+
+        if timeout_seconds > 0:
+            await user.timeout(timedelta(seconds=timeout_seconds), reason=f"Timed out by {interaction.user}: {display_reason}")
+        else:
+            await user.timeout(timedelta(minutes=5), reason=f"Timed out by {interaction.user}: {display_reason}")
+
+        try:
+            await user.send(embed=dm_embed)
+        except discord.Forbidden:
+            pass
+
+        await interaction.followup.send(
+            f"Successfully timed out {user.mention}. Reason: {display_reason} | Duration: {display_duration}",
+            ephemeral=True
+        )
+
+    except discord.Forbidden:
+        await interaction.followup.send(
+            "I do not have permission to timeout this user! Check my role and ensure my role is higher than this role!",
+            ephemeral=True
+        )
+
+@timeout.error
+async def timeout_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
 
