@@ -33,7 +33,11 @@ class BotClient(discord.Client):
         afk_doc = afk_ref.get()
         if afk_doc.exists:
             data = afk_doc.to_dict()
-            await message.channel.send(f"{message.author.mention} Welcome back! You were last seen <t:{data['time']}:R>.")
+            embed = discord.Embed(
+                description=f"Welcome back {message.author.mention}! You were last seen <t:{data['time']}:R>.",
+                color=0x00FF00
+            )
+            await message.channel.send(embed=embed)
             afk_ref.delete()
 
         for mention in message.mentions:
@@ -43,7 +47,12 @@ class BotClient(discord.Client):
             afk_data = db.collection("afk").document(str(mention.id)).get()
             if afk_data.exists:
                 data = afk_data.to_dict()
-                await message.channel.send(f"{mention.name} is currently afk. They were last seen <t:{data['time']}:R>.\n- Reason: {data['reason']}")
+                embed = discord.Embed(
+                    title=f"💤 {mention.name} is AFK",
+                    description=f"They were last seen <t:{data['time']}:R>.\n\n**Reason:** {data['reason']}",
+                    color=0xFF0000
+                )
+                await message.channel.send(embed=embed)
 
         doc_ref = db.collection("sticky").document(str(message.channel.id))
         doc = doc_ref.get()
@@ -81,7 +90,12 @@ async def afk(interaction: discord.Interaction, reason: str = "No reason provide
         "reason": reason,
         "time": int(time.time())
     })
-    await interaction.response.send_message(f"{interaction.user.mention}, your AFK status has been set.", ephemeral=True)
+    embed = discord.Embed(
+        title=f"⏳ {interaction.user.display_name} is AFK!",
+        description=f"**Reason:** {reason}",
+        color=0xF1C40F
+    )
+    await interaction.response.send_message(embed=embed)
 
 @client.tree.command(name="kick", description="kick a user")
 @app_commands.describe(user="Select a members to kick.", reason="Reason to kick (Optional).")
