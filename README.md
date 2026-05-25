@@ -1,1 +1,1 @@
-# Epical-bot
+# SigmaBot
