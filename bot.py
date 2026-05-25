@@ -48,7 +48,7 @@ class BotClient(discord.Client):
             if afk_data.exists:
                 data = afk_data.to_dict()
                 embed = discord.Embed(
-                    title=f"💤 {mention.name} is AFK",
+                    title=f"💤 {mention.display_name} is AFK!",
                     description=f"They were last seen <t:{data['time']}:R>.\n\n**Reason:** {data['reason']}",
                     color=0xFF0000
                 )
@@ -91,10 +91,11 @@ async def afk(interaction: discord.Interaction, reason: str = "No reason provide
         "time": int(time.time())
     })
     embed = discord.Embed(
-        title=f"⏳ {interaction.user.display_name} is AFK!",
-        description=f"**Reason:** {reason}",
+        title="Status Updated",
+        description="You are now AFK!",
         color=0xF1C40F
     )
+    embed.add_field(name="Reason", value=reason)
     await interaction.response.send_message(embed=embed)
 
 @client.tree.command(name="kick", description="kick a user")
