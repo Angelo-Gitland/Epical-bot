@@ -110,8 +110,6 @@ async def purge(
     filter_by_role: discord.Role = None,
     filter_by_bots: bool = False
 ):
-    await interaction.response.defer(ephemeral=True)
-
     def check(msg):
         if filter_by_user and msg.author != filter_by_user:
             return False
@@ -123,9 +121,9 @@ async def purge(
 
     try:
         deleted = await interaction.channel.purge(limit=number_of_messages, check=check)
-        await interaction.followup.send(f"Successfully deleted **{len(deleted)}** message(s).", ephemeral=True)
+        await interaction.response.send_message(f"Successfully deleted **{len(deleted)}** message(s).", ephemeral=True)
     except discord.Forbidden:
-        await interaction.followup.send("I do not have permission to purge messages!", ephemeral=True)
+        await interaction.response.send_message("I do not have permission to purge messages!", ephemeral=True)
 
 @purge.error
 async def purge_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
