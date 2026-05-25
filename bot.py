@@ -382,7 +382,6 @@ async def stick_remove(
             pass
 
     doc_ref.delete()
-
     await interaction.followup.send(
         f"✅ Sticky message removed from {channel.mention}!",
         ephemeral=True
@@ -390,6 +389,37 @@ async def stick_remove(
 
 @stick_remove.error
 async def stick_remove_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
+
+@client.tree.command(name="nick", description="Change user/bots nickname.")
+@app_commands.describe(
+    user="User to set nickname.",
+    nickname="Change user nickname."
+)
+@app_commands.checks.has_permissions(manage_nicknames=True)
+async def nick(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    nickname: str
+):
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        old_nick = user.display_name
+        await user.edit(nick=nickname)
+        await interaction.followup.send(
+            f"✅ Successfully changed **{old_nick}**'s nickname to **{nickname}**!",
+            ephemeral=True
+        )
+    except discord.Forbidden:
+        await interaction.followup.send(
+            "I do not have permission to change nickname of this user!",
+            ephemeral=True
+        )
+
+@nick.error
+async def nick_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
 
