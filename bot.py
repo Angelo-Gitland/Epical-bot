@@ -3,6 +3,19 @@ from discord import app_commands
 import re
 import os
 from datetime import timedelta
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# Firebase setup
+cred = credentials.Certificate({
+    "type": "service_account",
+    "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+    "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n"),
+    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+    "token_uri": "https://oauth2.googleapis.com/token"
+})
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 class BotClient(discord.Client):
     def __init__(self):
@@ -23,6 +36,41 @@ class BotClient(discord.Client):
         print(f"[ERROR] An error occurred in event {event}")
         import traceback
         traceback.print_exc()
+
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+
+        doc_ref = db.collection("sticky").document(str(message.channel.id))
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            return
+
+        data = doc.to_dict()
+        if not data.get("enabled", True):
+            return
+
+        message_count = data.get("message_count", 0) + 1
+        duration = data.get("duration", 5)
+        sticky_message = data.get("message", "")
+        last_message_id = data.get("last_message_id", None)
+
+        if message_count >= duration:
+            if last_message_id:
+                try:
+                    old_msg = await message.channel.fetch_message(int(last_message_id))
+                    await old_msg.delete()
+                except (discord.NotFound, discord.Forbidden):
+                    pass
+
+            new_msg = await message.channel.send(f"**Stickied Message:**\n\n{sticky_message}")
+            doc_ref.update({
+                "last_message_id": str(new_msg.id),
+                "message_count": 0
+            })
+        else:
+            doc_ref.update({"message_count": message_count})
 
 client = BotClient()
 
@@ -266,5 +314,45 @@ async def ping(interaction: discord.Interaction):
         f"**Guild:** {guild_count}\n"
         f"**Node:** {node}"
     )
+
+@client.tree.command(name="stick-create", description="Create a sticky message on the channel.")
+@app_commands.describe(
+    channel="Select a channel where to add sticky message.",
+    message="Set sticky message.",
+    duration="Number of messages to trigger sticky (Optional, default is 5).",
+    toggle="Enable or Disable sticky message from the channel (Optional)."
+)
+@app_commands.checks.has_permissions(manage_messages=True)
+async def stick_create(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel,
+    message: str,
+    duration: int = 5,
+    toggle: bool = True
+):
+    await interaction.response.defer(ephemeral=True)
+
+    doc_ref = db.collection("sticky").document(str(channel.id))
+    doc_ref.set({
+        "message": message,
+        "duration": duration,
+        "enabled": toggle,
+        "last_message_id": None,
+        "message_count": 0
+    })
+
+    status = "✅ Enabled" if toggle else "❌ Disabled"
+    await interaction.followup.send(
+        f"Sticky message set in {channel.mention}!\n"
+        f"**Message:** {message}\n"
+        f"**Trigger every:** {duration} messages\n"
+        f"**Status:** {status}",
+        ephemeral=True
+    )
+
+@stick_create.error
+async def stick_create_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
 
 client.run(os.getenv("TOKEN"))
