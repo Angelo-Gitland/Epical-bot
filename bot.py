@@ -319,16 +319,14 @@ async def ping(interaction: discord.Interaction):
 @app_commands.describe(
     channel="Select a channel where to add sticky message.",
     message="Set sticky message.",
-    duration="Number of messages to trigger sticky (Optional, default is 5).",
-    toggle="Enable or Disable sticky message from the channel (Optional)."
+    duration="Number of messages to trigger sticky (Optional, default is 5)."
 )
 @app_commands.checks.has_permissions(manage_messages=True)
 async def stick_create(
     interaction: discord.Interaction,
     channel: discord.TextChannel,
     message: str,
-    duration: int = 5,
-    toggle: bool = True
+    duration: int = 5
 ):
     await interaction.response.defer(ephemeral=True)
 
@@ -336,22 +334,62 @@ async def stick_create(
     doc_ref.set({
         "message": message,
         "duration": duration,
-        "enabled": toggle,
+        "enabled": True,
         "last_message_id": None,
         "message_count": 0
     })
 
-    status = "✅ Enabled" if toggle else "❌ Disabled"
     await interaction.followup.send(
-        f"Sticky message set in {channel.mention}!\n"
+        f"✅ Sticky message set in {channel.mention}!\n"
         f"**Message:** {message}\n"
-        f"**Trigger every:** {duration} messages\n"
-        f"**Status:** {status}",
+        f"**Trigger every:** {duration} messages",
         ephemeral=True
     )
 
 @stick_create.error
 async def stick_create_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
+
+@client.tree.command(name="stick-remove", description="Remove stick message from a specific channel.")
+@app_commands.describe(
+    channel="Select a channel where stick messages will be deleted."
+)
+@app_commands.checks.has_permissions(manage_messages=True)
+async def stick_remove(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel
+):
+    await interaction.response.defer(ephemeral=True)
+
+    doc_ref = db.collection("sticky").document(str(channel.id))
+    doc = doc_ref.get()
+
+    if not doc.exists:
+        await interaction.followup.send(
+            f"❌ No sticky message found in {channel.mention}!",
+            ephemeral=True
+        )
+        return
+
+    data = doc.to_dict()
+    last_message_id = data.get("last_message_id", None)
+    if last_message_id:
+        try:
+            old_msg = await channel.fetch_message(int(last_message_id))
+            await old_msg.delete()
+        except (discord.NotFound, discord.Forbidden):
+            pass
+
+    doc_ref.delete()
+
+    await interaction.followup.send(
+        f"✅ Sticky message removed from {channel.mention}!",
+        ephemeral=True
+    )
+
+@stick_remove.error
+async def stick_remove_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
 
