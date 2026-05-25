@@ -392,6 +392,41 @@ async def stick_remove_error(interaction: discord.Interaction, error: app_comman
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
 
+@client.tree.command(name="stick-list", description="Get the list of channels with stick messages.")
+@app_commands.checks.has_permissions(manage_messages=True)
+async def stick_list(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    docs = db.collection("sticky").stream()
+    entries = []
+
+    for doc in docs:
+        channel_id = int(doc.id)
+        channel = interaction.guild.get_channel(channel_id)
+        if channel:
+            entries.append(f"- #{channel.name} | Id: {channel_id}")
+
+    if not entries:
+        await interaction.followup.send(
+            "❌ No sticky messages found in this server!",
+            ephemeral=True
+        )
+        return
+
+    embed = discord.Embed(
+        title="📌 Sticky Messages List",
+        description="\n".join(entries),
+        color=0x5865F2
+    )
+    embed.set_footer(text=f"Total: {len(entries)} sticky channel(s)")
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+@stick_list.error
+async def stick_list_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You do not have permission to use this command!", ephemeral=True)
+
 @client.tree.command(name="nick", description="Change user/bots nickname.")
 @app_commands.describe(
     user="User to set nickname.",
